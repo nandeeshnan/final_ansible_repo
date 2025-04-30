@@ -12,6 +12,7 @@
     security_groups: ["sg-0ffc3795cd46f58d4"]
     tag_name: ansible-instance
 
+
   tasks:
     - name: Launch EC2 instance
       amazon.aws.ec2_instance:
