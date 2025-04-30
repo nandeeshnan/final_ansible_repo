@@ -169,6 +169,7 @@ jobs:
             nohup python3 /home/ubuntu/flask_app.py > flask.log 2>&1 &
           "
 
+
       # Check if Flask is running through NGINX
       - name: Check Flask app through NGINX
         run: |
