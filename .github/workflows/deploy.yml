@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Ansible
+      - name: Install Ansible and AWS collection
         run: |
           pip install ansible boto3
           ansible-galaxy collection install amazon.aws
@@ -28,10 +28,25 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: Run Ansible Playbook
-        run: ansible-playbook main.yml
+      - name: Run Ansible Playbook to launch EC2
+        id: ansible
+        run: |
+          ansible-playbook main.yml
+          INSTANCE_IP=$(cat ec2_instance_ip.txt)
+          echo "INSTANCE_IP=$INSTANCE_IP" >> $GITHUB_ENV
 
-      - name: Save public IP to file
-        copy:
-          dest: "./ec2_ip.txt"
-          content: "{{ ec2_result.instances[0].network_interfaces[0].association.public_ip }}"
+      - name: Save Private Key
+        run: |
+          echo "${{ secrets.EC2_PRIVATE_KEY }}" > ec2_key.pem
+          chmod 600 ec2_key.pem
+
+      - name: Wait for EC2 SSH to be ready
+        run: |
+          for i in {1..30}; do
+            ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "echo connected" && break
+            echo "Waiting for SSH..." && sleep 10
+          done
+
+      - name: Run Command on EC2 (NGINX check)
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ec2_key.pem ec2-user@${{ env.INSTANCE_IP }} "sudo systemctl status nginx"
