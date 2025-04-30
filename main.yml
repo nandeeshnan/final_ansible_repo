@@ -64,18 +64,18 @@
 
 
 ---
-- name: Create EC2 Instance with NGINX and Flask
+- name: Create EC2 instance
   hosts: localhost
   connection: local
   gather_facts: no
   vars:
     region: us-east-2
-    key_name: ansible-ec2-key  # Replace with your actual key pair
+    key_name: ansible-ec2-key
     instance_type: t2.micro
-    image_id: ami-04f167a56786e4b09  # Amazon Linux 2 AMI (for us-east-1)
+    image_id: ami-04f167a56786e4b09
     vpc_subnet_id: subnet-0f54d3d932601a661
-    security_groups: ["sg-0ffc3795cd46f58d4"]  # Name of SG (not ID)
-    tag_name: ansible-instance
+    security_groups: ["sg-0ffc3795cd46f58d4"]
+    tag_name: flask-app
 
   tasks:
     - name: Launch EC2 instance
@@ -94,33 +94,78 @@
           assign_public_ip: true
       register: ec2_result
 
-    - name: Print instance public IP
-      debug:
-        msg: "Instance IP: {{ ec2_result.instances[0].network_interfaces[0].association.public_ip }}"
+    - name: Add new host to inventory
+      add_host:
+        name: flask_ec2
+        ansible_host: "{{ ec2_result.instances[0].network_interfaces[0].association.public_ip }}"
+        ansible_user: ubuntu
+        ansible_ssh_private_key_file: ./ec2_key.pem
 
+    - name: Wait for SSH
+      ansible.builtin.wait_for:
+        host: "{{ ec2_result.instances[0].network_interfaces[0].association.public_ip }}"
+        port: 22
+        timeout: 300
+        state: started
+
+- name: Configure NGINX and Flask app on EC2
+  hosts: flask_ec2
+  become: true
+  tasks:
     - name: Install NGINX
-      ansible.builtin.apt:
+      apt:
         name: nginx
         state: present
-        update_cache: yes
+        update_cache: true
 
     - name: Start and enable NGINX
-      ansible.builtin.systemd:
+      systemd:
         name: nginx
-        state: started
         enabled: yes
+        state: started
 
-    - name: Configure NGINX as reverse proxy
-      ansible.builtin.template:
-        src: nginx_reverse_proxy.conf.j2
+    - name: Install Python3 and pip
+      apt:
+        name: [python3, python3-pip]
+        state: present
+
+    - name: Install Flask
+      pip:
+        name: flask
+
+    - name: Upload Flask app
+      copy:
+        dest: /home/ubuntu/app.py
+        content: |
+          from flask import Flask
+          app = Flask(__name__)
+          @app.route("/")
+          def hello():
+              return "Hello from Flask!"
+          if __name__ == "__main__":
+              app.run(host="0.0.0.0", port=8000)
+
+    - name: Start Flask app in background
+      shell: nohup python3 /home/ubuntu/app.py &
+
+    - name: Configure NGINX reverse proxy
+      copy:
         dest: /etc/nginx/sites-available/default
-        mode: '0644'
+        content: |
+          server {
+              listen 80;
+              server_name localhost;
+
+              location / {
+                  proxy_pass http://localhost:8000;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+          }
 
     - name: Reload NGINX
-      ansible.builtin.systemd:
+      systemd:
         name: nginx
         state: reloaded
-
-    - name: Ensure NGINX is listening on port 80
-      ansible.builtin.command:
-        cmd: ss -tuln | grep ':80'
