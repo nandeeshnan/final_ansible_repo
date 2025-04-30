@@ -30,6 +30,7 @@
           assign_public_ip: true
       register: ec2_result
 
+
     - name: Save public IP to file
       copy:
         dest: "./ec2_instance_ip.txt"
