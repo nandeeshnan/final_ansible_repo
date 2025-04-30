@@ -113,27 +113,20 @@ jobs:
         run: |
           ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "sudo apt-get update && sudo apt-get install -y nginx"
 
-      - name: Run Command on EC2 (NGINX check)
+      - name: Test NGINX installation
         run: |
-          ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "sudo systemctl status nginx"
+          ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "sudo nginx -t"
+
+      - name: Restart NGINX
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "sudo systemctl restart nginx"
 
       # Copy Flask app to EC2
       - name: Copy Flask app to EC2
         run: |
           scp -o StrictHostKeyChecking=no -i ec2_key.pem flask_app.py ubuntu@${{ env.INSTANCE_IP }}:/home/ubuntu/flask_app.py
 
-      # # Install Flask on EC2 if not already installed
-      # - name: Install Flask on EC2
-      #   run: |
-      #     ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "sudo apt-get install -y python3-pip && sudo pip3 install flask"
-
-      # Run Flask app in the background
-      # - name: Run Flask app on EC2
-      #   run: |
-      #     ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "nohup python3 /home/ubuntu/flask_app.py > flask.log 2>&1 &"
-
-
-      # Install Flask on EC2 using virtual environment
+      # Install Flask and dependencies on EC2 using virtual environment
       - name: Install Flask on EC2
         run: |
           ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "
@@ -165,13 +158,21 @@ jobs:
               }
             }\" > /etc/nginx/sites-available/default';
 
-            sudo systemctl restart nginx
+            sudo nginx -t && sudo systemctl restart nginx
           "
 
-
+      # Run Flask app in the background using nohup
+      - name: Run Flask app on EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "
+            source /home/ubuntu/venv/bin/activate
+            nohup python3 /home/ubuntu/flask_app.py > flask.log 2>&1 &
+          "
 
       # Check if Flask is running through NGINX
       - name: Check Flask app through NGINX
         run: |
-          curl http://${{ env.INSTANCE_IP }}
-
+          for i in {1..30}; do
+            curl -s http://${{ env.INSTANCE_IP }} && break
+            echo "Waiting for Flask app..." && sleep 10
+          done
