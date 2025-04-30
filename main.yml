@@ -1,0 +1,44 @@
+---
+- name: Create EC2 Instance
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Launch EC2 instance
+      amazon.aws.ec2_instance:
+        key_name: "ansible-ec2-key"
+        instance_type: t2.micro
+        image_id: ami-04f167a56786e4b09  # Ubuntu 20.04
+        region: us-east-2
+        security_group: sg-0ffc3795cd46f58d4 # Uses your default SG
+        wait: yes
+        network:
+          assign_public_ip: yes
+        tags:
+          Name: NGINX-Proxy
+      register: ec2
+
+    - name: Wait for SSH
+      wait_for:
+        host: "{{ ec2.instances[0].public_ip_address }}"
+        port: 22
+        timeout: 300
+
+- name: Configure NGINX
+  hosts: "{{ ec2.instances[0].public_ip_address }}"
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Install NGINX
+      apt:
+        name: nginx
+        state: present
+        update_cache: yes
+
+    - name: Start NGINX
+      service:
+        name: nginx
+        state: started
+        enabled: yes
