@@ -145,7 +145,7 @@ jobs:
       - name: Configure NGINX to proxy requests to Flask
         run: |
           ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "
-            sudo bash -c 'echo \"server {
+            echo 'server {
               listen 80;
               server_name localhost;
 
@@ -156,9 +156,8 @@ jobs:
                 proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
                 proxy_set_header X-Forwarded-Proto \$scheme;
               }
-            }\" > /etc/nginx/sites-available/default';
-
-            sudo nginx -t && sudo systemctl restart nginx
+            }' | sudo tee /etc/nginx/sites-available/default > /dev/null
+            sudo ln -s /etc/nginx/sites-available/default /etc/nginx/sites-enabled/
           "
 
       # Run Flask app in the background using nohup
