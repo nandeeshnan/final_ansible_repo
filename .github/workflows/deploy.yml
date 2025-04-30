@@ -157,7 +157,8 @@ jobs:
                 proxy_set_header X-Forwarded-Proto \$scheme;
               }
             }' | sudo tee /etc/nginx/sites-available/default > /dev/null
-            sudo ln -s /etc/nginx/sites-available/default /etc/nginx/sites-enabled/
+            sudo ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
+
           "
 
       # Run Flask app in the background using nohup
