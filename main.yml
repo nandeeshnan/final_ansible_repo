@@ -1,15 +1,80 @@
+# ---
+# - name: Create EC2 Instance
+#   hosts: localhost
+#   connection: local
+#   gather_facts: no
+#   vars:
+#     region: us-east-2
+#     key_name: ansible-ec2-key
+#     instance_type: t2.micro
+#     image_id: ami-04f167a56786e4b09
+#     vpc_subnet_id: subnet-0f54d3d932601a661
+#     security_groups: ["sg-0ffc3795cd46f58d4"]
+#     tag_name: ansible-instance
+
+#   tasks:
+#     - name: Launch EC2 instance
+#       amazon.aws.ec2_instance:
+#         key_name: "{{ key_name }}"
+#         instance_type: "{{ instance_type }}"
+#         image_id: "{{ image_id }}"
+#         wait: yes
+#         count: 1
+#         region: "{{ region }}"
+#         vpc_subnet_id: "{{ vpc_subnet_id }}"
+#         security_groups: "{{ security_groups }}"
+#         tags:
+#           Name: "{{ tag_name }}"
+#         network:
+#           assign_public_ip: true
+#       register: ec2_result
+
+#     - name: Save public IP to file
+#       copy:
+#         dest: "./ec2_instance_ip.txt"
+#         content: "{{ ec2_result.instances[0].network_interfaces[0].association.public_ip }}"
+  
+
+#     - name: Backup the current NGINX config file
+#       copy:
+#         src: /etc/nginx/sites-available/default
+#         dest: /etc/nginx/sites-available/default.backup
+#         remote_src: yes
+
+#     - name: Update NGINX configuration for reverse proxy
+#       ansible.builtin.lineinfile:
+#         path: /etc/nginx/sites-available/default
+#         regexp: '^location / {'
+#         line: |
+#           location / {
+#               proxy_pass http://localhost:8000;
+#               proxy_http_version 1.1;
+#               proxy_set_header Upgrade $http_upgrade;
+#               proxy_set_header Connection 'upgrade';
+#               proxy_set_header Host $host;
+#               proxy_cache_bypass $http_upgrade;
+#           }
+#       notify: Reload NGINX
+
+#   handlers:
+#     - name: Reload NGINX
+#       ansible.builtin.systemd:
+#         name: nginx
+#         state: reloaded
+
+
 ---
-- name: Create EC2 Instance
+- name: Create EC2 Instance with NGINX and Flask
   hosts: localhost
   connection: local
   gather_facts: no
   vars:
     region: us-east-2
-    key_name: ansible-ec2-key
+    key_name: ansible-ec2-key  # Replace with your actual key pair
     instance_type: t2.micro
-    image_id: ami-04f167a56786e4b09
+    image_id: ami-04f167a56786e4b09  # Amazon Linux 2 AMI (for us-east-1)
     vpc_subnet_id: subnet-0f54d3d932601a661
-    security_groups: ["sg-0ffc3795cd46f58d4"]
+    security_groups: ["sg-0ffc3795cd46f58d4"]  # Name of SG (not ID)
     tag_name: ansible-instance
 
   tasks:
@@ -29,7 +94,33 @@
           assign_public_ip: true
       register: ec2_result
 
-    - name: Save public IP to file
-      copy:
-        dest: "./ec2_instance_ip.txt"
-        content: "{{ ec2_result.instances[0].network_interfaces[0].association.public_ip }}"
+    - name: Print instance public IP
+      debug:
+        msg: "Instance IP: {{ ec2_result.instances[0].network_interfaces[0].association.public_ip }}"
+
+    - name: Install NGINX
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+        update_cache: yes
+
+    - name: Start and enable NGINX
+      ansible.builtin.systemd:
+        name: nginx
+        state: started
+        enabled: yes
+
+    - name: Configure NGINX as reverse proxy
+      ansible.builtin.template:
+        src: nginx_reverse_proxy.conf.j2
+        dest: /etc/nginx/sites-available/default
+        mode: '0644'
+
+    - name: Reload NGINX
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded
+
+    - name: Ensure NGINX is listening on port 80
+      ansible.builtin.command:
+        cmd: ss -tuln | grep ':80'
