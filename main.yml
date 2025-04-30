@@ -33,13 +33,25 @@
       copy:
         dest: "./ec2_instance_ip.txt"
         content: "{{ ec2_result.instances[0].network_interfaces[0].association.public_ip }}"
-      
+
+    - name: Add new host to inventory (for next play)
+      add_host:
+        name: flask_ec2
+        ansible_host: "{{ ec2_result.instances[0].network_interfaces[0].association.public_ip }}"
+        ansible_user: ubuntu
+        ansible_ssh_private_key_file: ./ec2_key.pem
+        ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+
+    - name: Wait for SSH to come up
+      wait_for:
+        host: "{{ ec2_result.instances[0].network_interfaces[0].association.public_ip }}"
+        port: 22
+        timeout: 300
+        state: started
 
 - name: Configure Flask app on EC2
-  hosts: all
+  hosts: flask_ec2
   become: yes
-  vars:
-    ansible_ssh_common_args: '-o StrictHostKeyChecking=no
   tasks:
     - name: Copy Flask app
       copy:
@@ -47,19 +59,17 @@
         dest: /home/ubuntu/flask_app.py
         mode: '0755'
         owner: ubuntu
-        group: ubunt
+        group: ubuntu
+
     - name: Install Flask
       apt:
         name: python3-flask
         state: present
-        update_cache: tru
+        update_cache: true
+
     - name: Run Flask app in background on port 8000
       become: false
       shell: |
         nohup python3 /home/ubuntu/flask_app.py > flask.log 2>&1 &
       args:
         executable: /bin/bash
-
-      
-
-        
