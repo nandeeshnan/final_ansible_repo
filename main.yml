@@ -1,70 +1,5 @@
-# ---
-# - name: Create EC2 Instance
-#   hosts: localhost
-#   connection: local
-#   gather_facts: no
-#   vars:
-#     region: us-east-2
-#     key_name: ansible-ec2-key
-#     instance_type: t2.micro
-#     image_id: ami-04f167a56786e4b09
-#     vpc_subnet_id: subnet-0f54d3d932601a661
-#     security_groups: ["sg-0ffc3795cd46f58d4"]
-#     tag_name: ansible-instance
-
-#   tasks:
-#     - name: Launch EC2 instance
-#       amazon.aws.ec2_instance:
-#         key_name: "{{ key_name }}"
-#         instance_type: "{{ instance_type }}"
-#         image_id: "{{ image_id }}"
-#         wait: yes
-#         count: 1
-#         region: "{{ region }}"
-#         vpc_subnet_id: "{{ vpc_subnet_id }}"
-#         security_groups: "{{ security_groups }}"
-#         tags:
-#           Name: "{{ tag_name }}"
-#         network:
-#           assign_public_ip: true
-#       register: ec2_result
-
-#     - name: Save public IP to file
-#       copy:
-#         dest: "./ec2_instance_ip.txt"
-#         content: "{{ ec2_result.instances[0].network_interfaces[0].association.public_ip }}"
-  
-
-#     - name: Backup the current NGINX config file
-#       copy:
-#         src: /etc/nginx/sites-available/default
-#         dest: /etc/nginx/sites-available/default.backup
-#         remote_src: yes
-
-#     - name: Update NGINX configuration for reverse proxy
-#       ansible.builtin.lineinfile:
-#         path: /etc/nginx/sites-available/default
-#         regexp: '^location / {'
-#         line: |
-#           location / {
-#               proxy_pass http://localhost:8000;
-#               proxy_http_version 1.1;
-#               proxy_set_header Upgrade $http_upgrade;
-#               proxy_set_header Connection 'upgrade';
-#               proxy_set_header Host $host;
-#               proxy_cache_bypass $http_upgrade;
-#           }
-#       notify: Reload NGINX
-
-#   handlers:
-#     - name: Reload NGINX
-#       ansible.builtin.systemd:
-#         name: nginx
-#         state: reloaded
-
-
 ---
-- name: Create EC2 instance
+- name: Create EC2 Instance
   hosts: localhost
   connection: local
   gather_facts: no
@@ -75,7 +10,7 @@
     image_id: ami-04f167a56786e4b09
     vpc_subnet_id: subnet-0f54d3d932601a661
     security_groups: ["sg-0ffc3795cd46f58d4"]
-    tag_name: flask-app
+    tag_name: ansible-instance
 
   tasks:
     - name: Launch EC2 instance
@@ -94,78 +29,10 @@
           assign_public_ip: true
       register: ec2_result
 
-    - name: Add new host to inventory
-      add_host:
-        name: flask_ec2
-        ansible_host: "{{ ec2_result.instances[0].network_interfaces[0].association.public_ip }}"
-        ansible_user: ubuntu
-        ansible_ssh_private_key_file: ./ec2_key.pem
-
-    - name: Wait for SSH
-      ansible.builtin.wait_for:
-        host: "{{ ec2_result.instances[0].network_interfaces[0].association.public_ip }}"
-        port: 22
-        timeout: 300
-        state: started
-
-- name: Configure NGINX and Flask app on EC2
-  hosts: flask_ec2
-  become: true
-  tasks:
-    - name: Install NGINX
-      apt:
-        name: nginx
-        state: present
-        update_cache: true
-
-    - name: Start and enable NGINX
-      systemd:
-        name: nginx
-        enabled: yes
-        state: started
-
-    - name: Install Python3 and pip
-      apt:
-        name: [python3, python3-pip]
-        state: present
-
-    - name: Install Flask
-      pip:
-        name: flask
-
-    - name: Upload Flask app
+    - name: Save public IP to file
       copy:
-        dest: /home/ubuntu/app.py
-        content: |
-          from flask import Flask
-          app = Flask(__name__)
-          @app.route("/")
-          def hello():
-              return "Hello from Flask!"
-          if __name__ == "__main__":
-              app.run(host="0.0.0.0", port=8000)
+        dest: "./ec2_instance_ip.txt"
+        content: "{{ ec2_result.instances[0].network_interfaces[0].association.public_ip }}"
+  
 
-    - name: Start Flask app in background
-      shell: nohup python3 /home/ubuntu/app.py &
-
-    - name: Configure NGINX reverse proxy
-      copy:
-        dest: /etc/nginx/sites-available/default
-        content: |
-          server {
-              listen 80;
-              server_name localhost;
-
-              location / {
-                  proxy_pass http://localhost:8000;
-                  proxy_set_header Host $host;
-                  proxy_set_header X-Real-IP $remote_addr;
-                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto $scheme;
-              }
-          }
-
-    - name: Reload NGINX
-      systemd:
-        name: nginx
-        state: reloaded
+    
