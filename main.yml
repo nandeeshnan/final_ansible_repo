@@ -33,6 +33,36 @@
       copy:
         dest: "./ec2_instance_ip.txt"
         content: "{{ ec2_result.instances[0].network_interfaces[0].association.public_ip }}"
-  
+      
 
-    
+    - name: Configure Flask app on EC2
+      hosts: all
+      become: yes
+      vars:
+        ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+
+      tasks:
+        - name: Copy Flask app
+          copy:
+            src: flask_app.py
+            dest: /home/ubuntu/flask_app.py
+            mode: '0755'
+            owner: ubuntu
+            group: ubuntu
+
+        - name: Install Flask
+          apt:
+            name: python3-flask
+            state: present
+            update_cache: true
+
+        - name: Run Flask app in background on port 8000
+          become: false
+          shell: |
+            nohup python3 /home/ubuntu/flask_app.py > flask.log 2>&1 &
+          args:
+            executable: /bin/bash
+
+      
+
+        
