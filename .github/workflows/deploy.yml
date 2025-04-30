@@ -128,9 +128,25 @@ jobs:
           ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "sudo apt-get install -y python3-pip && sudo pip3 install flask"
 
       # Run Flask app in the background
-      - name: Run Flask app on EC2
+      # - name: Run Flask app on EC2
+      #   run: |
+      #     ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "nohup python3 /home/ubuntu/flask_app.py > flask.log 2>&1 &"
+
+
+      # Install Flask on EC2 using virtual environment
+      - name: Install Flask on EC2
         run: |
-          ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "nohup python3 /home/ubuntu/flask_app.py > flask.log 2>&1 &"
+          ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "
+            # Install python3-venv if not already installed
+            sudo apt-get install -y python3-venv
+
+            # Create a virtual environment in the home directory
+            python3 -m venv /home/ubuntu/venv
+
+            # Activate the virtual environment and install Flask
+            source /home/ubuntu/venv/bin/activate
+            pip install flask
+          "
 
       # Configure NGINX to proxy to Flask
       - name: Configure NGINX to proxy requests to Flask
