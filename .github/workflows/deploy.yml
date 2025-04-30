@@ -97,6 +97,7 @@ jobs:
           IP=$(cat ec2_instance_ip.txt)
           echo "INSTANCE_IP=$IP" >> $GITHUB_ENV
 
+
       - name: Save Private Key
         run: |
           echo "${{ secrets.EC2_PRIVATE_KEY }}" > ec2_key.pem
