@@ -37,7 +37,6 @@ jobs:
           IP=$(cat ec2_instance_ip.txt)
           echo "INSTANCE_IP=$IP" >> $GITHUB_ENV
 
-
       - name: Save Private Key
         run: |
           echo "${{ secrets.EC2_PRIVATE_KEY }}" > ec2_key.pem
@@ -46,7 +45,7 @@ jobs:
       - name: Wait for EC2 SSH to be ready
         run: |
           for i in {1..30}; do
-            ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "echo connected" && break
+            ssh -o StrictHostKeyChecking=no -i ec2_key.pem ec2-user@${{ env.INSTANCE_IP }} "echo connected" && break
             echo "Waiting for SSH..." && sleep 10
           done
 
