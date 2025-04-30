@@ -37,6 +37,7 @@
         state: present
         update_cache: yes
 
+
     - name: Start NGINX
       service:
         name: nginx
