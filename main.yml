@@ -65,4 +65,10 @@
 
     - name: Print instance public IP
       debug:
-        msg: "Instance IP: {{ ec2_result.instances[0].public_ip }}"
+        msg: "Instance IP: {{ ec2_result.instances[0].network_interfaces[0].association.public_ip }}"
+    
+    - name: Debug full EC2 instance details
+      debug:
+        var: ec2_result
+
+
