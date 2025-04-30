@@ -168,6 +168,8 @@ jobs:
             sudo systemctl restart nginx
           "
 
+
+
       # Check if Flask is running through NGINX
       - name: Check Flask app through NGINX
         run: |
