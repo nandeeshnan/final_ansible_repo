@@ -48,6 +48,9 @@ jobs:
             ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "echo connected" && break
             echo "Waiting for SSH..." && sleep 10
           done
+      - name: Install NGINX on EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "sudo apt-get update && sudo apt-get install -y nginx"
 
       - name: Run Command on EC2 (NGINX check)
         run: |
