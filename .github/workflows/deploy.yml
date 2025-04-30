@@ -1,4 +1,64 @@
-name: Deploy EC2 with NGINX
+# name: Deploy EC2 with NGINX
+
+# on:
+#   push:
+#     branches: [main]
+#   workflow_dispatch:
+
+# jobs:
+#   deploy:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v3
+
+#       - name: Set up Python
+#         uses: actions/setup-python@v4
+#         with:
+#           python-version: '3.11'
+
+#       - name: Install Ansible and AWS collection
+#         run: |
+#           pip install ansible boto3
+#           ansible-galaxy collection install amazon.aws
+
+#       - name: Configure AWS Credentials
+#         uses: aws-actions/configure-aws-credentials@v2
+#         with:
+#           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#           aws-region: us-east-2
+
+#       - name: Run Ansible Playbook to launch EC2
+#         run: ansible-playbook main.yml
+
+#       - name: Read public IP from file
+#         id: get_ip
+#         run: |
+#           IP=$(cat ec2_instance_ip.txt)
+#           echo "INSTANCE_IP=$IP" >> $GITHUB_ENV
+
+#       - name: Save Private Key
+#         run: |
+#           echo "${{ secrets.EC2_PRIVATE_KEY }}" > ec2_key.pem
+#           chmod 400 ec2_key.pem
+
+#       - name: Wait for EC2 SSH to be ready
+#         run: |
+#           for i in {1..30}; do
+#             ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "echo connected" && break
+#             echo "Waiting for SSH..." && sleep 10
+#           done
+#       - name: Install NGINX on EC2
+#         run: |
+#           ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "sudo apt-get update && sudo apt-get install -y nginx"
+
+#       - name: Run Command on EC2 (NGINX check)
+#         run: |
+#           ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "sudo systemctl status nginx"
+
+
+
+name: Deploy EC2 with NGINX and Flask
 
 on:
   push:
@@ -48,6 +108,7 @@ jobs:
             ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "echo connected" && break
             echo "Waiting for SSH..." && sleep 10
           done
+
       - name: Install NGINX on EC2
         run: |
           ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "sudo apt-get update && sudo apt-get install -y nginx"
@@ -55,3 +116,44 @@ jobs:
       - name: Run Command on EC2 (NGINX check)
         run: |
           ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "sudo systemctl status nginx"
+
+      # Copy Flask app to EC2
+      - name: Copy Flask app to EC2
+        run: |
+          scp -o StrictHostKeyChecking=no -i ec2_key.pem flask_app.py ubuntu@${{ env.INSTANCE_IP }}:/home/ubuntu/flask_app.py
+
+      # Install Flask on EC2 if not already installed
+      - name: Install Flask on EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "sudo apt-get install -y python3-pip && sudo pip3 install flask"
+
+      # Run Flask app in the background
+      - name: Run Flask app on EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "nohup python3 /home/ubuntu/flask_app.py > flask.log 2>&1 &"
+
+      # Configure NGINX to proxy to Flask
+      - name: Configure NGINX to proxy requests to Flask
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ec2_key.pem ubuntu@${{ env.INSTANCE_IP }} "
+            sudo bash -c 'echo \"server {
+              listen 80;
+              server_name localhost;
+
+              location / {
+                proxy_pass http://127.0.0.1:5000;
+                proxy_set_header Host \$host;
+                proxy_set_header X-Real-IP \$remote_addr;
+                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto \$scheme;
+              }
+            }\" > /etc/nginx/sites-available/default';
+
+            sudo systemctl restart nginx
+          "
+
+      # Check if Flask is running through NGINX
+      - name: Check Flask app through NGINX
+        run: |
+          curl http://${{ env.INSTANCE_IP }}
+
